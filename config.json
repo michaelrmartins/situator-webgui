@@ -1,0 +1,7 @@
+{
+  "host": "192.168.56.101",
+  "port": 7021,
+  "database": "situator",
+  "user": "admin",
+  "password": "SitPass42"
+}
