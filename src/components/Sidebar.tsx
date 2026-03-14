@@ -4,13 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Activity, BarChart3, ShieldAlert, Settings, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { LayoutDashboard, Activity, HeartPulse, BarChart3, ShieldAlert, Settings, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 
 const navItems = [
   { name: 'Live Feed', href: '/', icon: Activity },
   { name: 'Door Status', href: '/status', icon: LayoutDashboard },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Access Logs', href: '/logs', icon: ShieldAlert },
+  { name: 'Health Check', href: '/health', icon: HeartPulse },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

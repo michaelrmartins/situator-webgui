@@ -112,16 +112,18 @@ export default function StatusPage() {
           <AnimatePresence>
             {doorData.map((d, index) => (
               <motion.div
-                key={d.Door}
-                initial={{ opacity: 0, y: 20 }}
+                key={`${d.Door}-${d.TotalCount}`} // Key changes on count update, triggering animation on the whole card
+                initial={{ opacity: 0.8, y: 0, scale: 0.98, backgroundColor: 'rgba(52, 152, 219, 0.3)' }} // Flash color (Blue)
                 animate={{ 
                   opacity: 1, 
                   y: 0, 
-                  backgroundColor: ['rgba(30, 41, 59, 0.4)', 'rgba(46, 204, 113, 0.25)', 'rgba(30, 41, 59, 0.4)']
+                  scale: 1,
+                  backgroundColor: 'rgba(30, 41, 59, 0.4)' // Revert to normal glass background
                 }}
                 transition={{ 
                   duration: 0.8,
-                  backgroundColor: { duration: 1.2, ease: "easeInOut" } 
+                  backgroundColor: { duration: 1.5, ease: "easeOut" },
+                  scale: { duration: 0.4, type: "spring", stiffness: 200 }
                 }}
                 className="relative glass-card p-5 rounded-2xl border-t-2 border-[#1abc9c]/50 overflow-hidden group"
               >
@@ -132,14 +134,11 @@ export default function StatusPage() {
                  </div>
                  
                  <div className="flex items-end gap-2 text-[#3498db]">
-                    <motion.span 
-                       key={d.TotalCount} 
-                       initial={{ scale: 1.5, color: '#2ecc71' }} 
-                       animate={{ scale: 1, color: '#3498db' }} 
+                    <span 
                        className="text-4xl font-bold tracking-tighter tabular-nums leading-none"
                     >
                        {d.TotalCount}
-                    </motion.span>
+                    </span>
                     <span className="text-sm font-medium text-[#7f8c8d] mb-1 leading-none">
                        accesses
                     </span>
