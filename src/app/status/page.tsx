@@ -112,28 +112,28 @@ export default function StatusPage() {
           <AnimatePresence>
             {doorData.map((d, index) => (
               <motion.div
-                key={`${d.Door}-${d.TotalCount}`} // Key changes on count update, triggering animation on the whole card
-                initial={{ opacity: 0.8, y: 0, scale: 0.98, backgroundColor: 'rgba(52, 152, 219, 0.3)' }} // Flash color (Blue)
-                animate={{ 
-                  opacity: 1, 
-                  y: 0, 
-                  scale: 1,
-                  backgroundColor: 'rgba(30, 41, 59, 0.4)' // Revert to normal glass background
-                }}
-                transition={{ 
-                  duration: 0.8,
-                  backgroundColor: { duration: 1.5, ease: "easeOut" },
-                  scale: { duration: 0.4, type: "spring", stiffness: 200 }
-                }}
+                key={d.Door}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8 }}
                 className="relative glass-card p-5 rounded-2xl border-t-2 border-[#1abc9c]/50 overflow-hidden group"
               >
-                 <div className="flex justify-between items-start mb-4">
+                 {/* Flashing Overlay without unmounting card */}
+                 <motion.div 
+                    key={`flash-${d.TotalCount}`}
+                    initial={{ opacity: 0.5 }}
+                    animate={{ opacity: 0 }}
+                    transition={{ duration: 1.5, ease: "easeOut" }}
+                    className="absolute inset-0 bg-[#3498db] pointer-events-none z-0"
+                 />
+                 
+                 <div className="flex justify-between items-start mb-4 relative z-10">
                     <h4 className="font-semibold text-slate-200 line-clamp-2 leading-tight">
                       {d.Door}
                     </h4>
                  </div>
                  
-                 <div className="flex items-end gap-2 text-[#3498db]">
+                 <div className="flex items-end gap-2 text-[#3498db] relative z-10">
                     <span 
                        className="text-4xl font-bold tracking-tighter tabular-nums leading-none"
                     >
@@ -156,7 +156,11 @@ export default function StatusPage() {
                  )}
                  
                  {/* Progress bar visual */}
-                 <div className="w-full h-1.5 bg-slate-800 rounded-full mt-5 overflow-hidden flex">
+                 <div className="flex items-center justify-between text-[11px] font-bold tracking-wide mt-5 mb-1.5 px-0.5 relative z-10">
+                    <span className="text-[#2ecc71] drop-shadow-sm">{Math.round((parseInt(d.AuthorizedCount)/Math.max(1, parseInt(d.TotalCount)))*100)}%</span>
+                    <span className="text-[#e74c3c] drop-shadow-sm">{Math.round((parseInt(d.DeniedCount)/Math.max(1, parseInt(d.TotalCount)))*100)}%</span>
+                 </div>
+                 <div className="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden flex relative z-10">
                     <motion.div 
                        initial={{ width: 0 }}
                        animate={{ width: `${Math.min((parseInt(d.AuthorizedCount)/Math.max(1, totalAccesses))*300, 100)}%` }}
