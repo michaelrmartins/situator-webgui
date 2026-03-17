@@ -206,7 +206,7 @@ export default function LiveFeed() {
             <AnimatePresence initial={false}>
               {events.map((event, i) => (
                 <motion.div
-                  key={`${event.Time}-${event.Name || 'unk'}-${event.Door}`}
+                  key={`${event.Time}-${event.Name || 'unk'}-${event.Door}-${i}`}
                   initial={{ opacity: 0, y: -20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ duration: 0.4, type: 'spring', bounce: 0.3 }}

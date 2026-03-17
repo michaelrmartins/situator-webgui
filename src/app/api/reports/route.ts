@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { DOORS_TODAY_QUERY, HOURLY_ACCESS_QUERY, DAILY_ACCESS_QUERY, AUTHORIZATION_STATS_QUERY, RFID_STATS_QUERY } from '@/lib/queries';
+import { DOORS_TODAY_QUERY, HOURLY_ACCESS_QUERY, DAILY_ACCESS_QUERY, AUTHORIZATION_STATS_QUERY, RFID_STATS_QUERY, NO_RFID_ACCESS_QUERY } from '@/lib/queries';
 
 export async function GET(request: Request) {
   try {
@@ -37,6 +37,9 @@ export async function GET(request: Request) {
             break;
         case 'rfid':
             result = await pool.query(RFID_STATS_QUERY, [startTimeStamp, endTimeStamp]);
+            break;
+        case 'no-rfid':
+            result = await pool.query(NO_RFID_ACCESS_QUERY, [startTimeStamp, endTimeStamp]);
             break;
         default:
             return NextResponse.json({ error: 'Invalid report type' }, { status: 400 });

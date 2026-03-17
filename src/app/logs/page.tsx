@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info } from 'lucide-react';
-import { startOfDay, endOfDay, subDays } from 'date-fns';
+import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info, Users, Download } from 'lucide-react';
+import { startOfDay, endOfDay, subDays, format } from 'date-fns';
 import { motion } from 'framer-motion';
 
 export default function LogsPage() {
@@ -14,6 +14,8 @@ export default function LogsPage() {
 
   const [authData, setAuthData] = useState([]);
   const [rfidData, setRfidData] = useState([]);
+  const [noRfidData, setNoRfidData] = useState([]);
+  const [filterType, setFilterType] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,15 +26,17 @@ export default function LogsPage() {
       const startMs = dateRange.start.getTime();
       const endMs = dateRange.end.getTime();
 
-      const [authRes, rfidRes] = await Promise.all([
+      const [authRes, rfidRes, noRfidRes] = await Promise.all([
         fetch(`/api/reports?type=auth&start=${startMs}&end=${endMs}`),
-        fetch(`/api/reports?type=rfid&start=${startMs}&end=${endMs}`)
+        fetch(`/api/reports?type=rfid&start=${startMs}&end=${endMs}`),
+        fetch(`/api/reports?type=no-rfid&start=${startMs}&end=${endMs}`)
       ]);
 
-      if (!authRes.ok || !rfidRes.ok) throw new Error('Failed to fetch data');
+      if (!authRes.ok || !rfidRes.ok || !noRfidRes.ok) throw new Error('Failed to fetch data');
 
       setAuthData(await authRes.json());
       setRfidData(await rfidRes.json());
+      setNoRfidData(await noRfidRes.json());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -88,6 +92,43 @@ export default function LogsPage() {
     }]
   };
 
+  const filteredNoRfidData = noRfidData.filter((person: any) => {
+    if (filterType === 'all') return true;
+    const typeLower = String(person.PersonType || '').toLowerCase();
+    const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
+    if (filterType === 'students') return isStudent;
+    if (filterType === 'collaborators') return !isStudent;
+    return true;
+  });
+
+  const handleExportCSV = () => {
+    if (filteredNoRfidData.length === 0) return;
+
+    // Headers
+    const headers = ['Name', 'Registration'];
+
+    // Rows
+    const rows = filteredNoRfidData.map((person: any) => {
+      // Wrap name in quotes to handle potential commas
+      const name = `"${person.Name || ''}"`;
+      const registration = `"${person.Matricula || 'N/A'}"`;
+      return [name, registration].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    // Trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `missing_rfid_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-8 h-full flex flex-col overflow-y-auto">
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -113,6 +154,7 @@ export default function LogsPage() {
            {error}
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-panel p-6 rounded-2xl relative shadow-lg">
             <h3 className="text-lg font-semibold text-slate-200 mb-2 flex items-center gap-2">
@@ -140,6 +182,110 @@ export default function LogsPage() {
             )}
           </motion.div>
         </div>
+        
+        <div className="mt-8 glass-panel p-6 rounded-2xl relative shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
+                 <Users size={20} className="text-purple-400" />
+                 Missing RFID Accesses
+              </h3>
+              <p className="text-sm text-slate-400">People who accessed without a registered RFID card.</p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleExportCSV}
+                disabled={filteredNoRfidData.length === 0 || isLoading}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed border border-blue-500/20 rounded-lg text-sm font-medium transition-all"
+              >
+                <Download size={16} />
+                Export CSV
+              </button>
+
+              <select 
+                value={filterType} 
+                onChange={(e) => setFilterType(e.target.value)}
+                className="bg-slate-800/50 border border-white/10 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 backdrop-blur-md outline-none shrink-0"
+              >
+                <option value="all">All</option>
+                <option value="collaborators">Collaborators</option>
+                <option value="students">Students</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-slate-300">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-800/50">
+                <tr>
+                  <th scope="col" className="px-6 py-2 rounded-tl-lg">Photo</th>
+                  <th scope="col" className="px-6 py-2">Name</th>
+                  <th scope="col" className="px-6 py-2">Registration</th>
+                  <th scope="col" className="px-6 py-2 rounded-tr-lg">Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                      <div className="flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
+                    </td>
+                  </tr>
+                ) : filteredNoRfidData.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                      No missing RFID records found for this selection.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredNoRfidData.map((person: any, idx) => {
+                    const typeLower = String(person.PersonType || '').toLowerCase();
+                    const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
+                    
+                    return (
+                      <tr key={person.PersonId || idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-2">
+                           {person.PersonImage ? (
+                             // eslint-disable-next-line @next/next/no-img-element
+                             <img 
+                               src={`http://192.168.56.101:8080/web_data/images/people/${person.PersonImage}/portrait.jpg`} 
+                               alt={person.Name} 
+                               className="w-8 h-8 rounded-full object-cover border border-white/10"
+                               onError={(e) => {
+                                 (e.target as HTMLImageElement).style.display = 'none';
+                                 (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                               }}
+                             />
+                           ) : (
+                             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 border border-white/10 font-bold text-xs">
+                               {person.Name?.[0] || '?'}
+                             </div>
+                           )}
+                           <div className="hidden w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 border border-white/10 font-bold text-xs">
+                             {person.Name?.[0] || '?'}
+                           </div>
+                        </td>
+                        <td className="px-6 py-2 font-medium text-slate-200">{person.Name}</td>
+                        <td className="px-6 py-2">{person.Matricula || 'N/A'}</td>
+                        <td className="px-6 py-2">
+                           <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                             isStudent
+                             ? 'text-[#9b59b6] bg-[#9b59b6]/10 border border-[#9b59b6]/20'
+                             : 'text-[#3498db] bg-[#3498db]/10 border border-[#3498db]/20'
+                           }`}>
+                             {isStudent ? 'Student' : 'Employee'}
+                           </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </>
       )}
       
       <div className="mt-8 glass-panel p-6 rounded-2xl flex gap-4 items-start border-l-4 border-l-blue-500">

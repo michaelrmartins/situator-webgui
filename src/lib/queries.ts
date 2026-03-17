@@ -130,3 +130,23 @@ export const PERSON_HISTORY_QUERY = `
     a."Time" desc 
   limit $2
 `;
+
+export const NO_RFID_ACCESS_QUERY = `
+  select distinct
+    person."Id" as "PersonId",
+    person."Name",
+    person."Document" as "Matricula",
+    person."PersonImage",
+    person."PersonType"
+  from 
+    "AccessTransaction" a 
+    JOIN "Person" person on person."Id" = a."PersonId" 
+    left join "PersonPin" pPin on Person."Id" = pPin."PersonId" 
+    left join "AccessCard" aCard on pPin."AccessCardId" = aCard."Id" 
+  where
+    a."Time" >= to_timestamp($1::numeric / 1000.0) and a."Time" <= to_timestamp($2::numeric / 1000.0)
+    and aCard."CardNumber" is null
+    and person."Name" is not null
+  order by 
+    person."Name" asc
+`;
