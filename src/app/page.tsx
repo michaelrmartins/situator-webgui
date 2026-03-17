@@ -149,7 +149,7 @@ export default function LiveFeed() {
 
   return (
     <div className="p-8 h-full flex flex-col">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent flex items-center gap-3">
             <Activity className="text-blue-400" size={32} />
@@ -198,13 +198,125 @@ export default function LiveFeed() {
           )}
         </div>
       ) : (
-        <div className="flex-1 overflow-hidden relative glass-panel rounded-2xl">
-          <div 
-             className="absolute inset-0 overflow-y-auto p-2 scroll-smooth"
-             onScroll={handleScroll}
-          >
-            <AnimatePresence initial={false}>
-              {events.map((event, i) => (
+        <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+          {events.length > 0 && !error && (() => {
+            const latest = events[0];
+            const pType = getPersonTypeLabel(latest.PersonType);
+            return (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              key={`latest-${latest.Time}-${latest.Name || 'unk'}-${latest.Door}`}
+              className="shrink-0 glass-panel rounded-2xl border border-white/10 shadow-xl overflow-hidden cursor-pointer"
+              onClick={() => {
+                if (latest.PersonId) {
+                  setSelectedPerson(latest);
+                  fetchPersonHistory(latest.PersonId);
+                }
+              }}
+            >
+              <div className="flex flex-row">
+                {/* Left: Data */}
+                <div className="flex-1 p-6 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-[#2c3e50] border border-white/10 flex items-center justify-center shrink-0">
+                        {getEventIcon(latest.Door)}
+                      </div>
+                      <div className="min-w-0">
+                        <h2 className="text-2xl font-bold text-white truncate">{latest.Name || 'Unidentified'}</h2>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold ${pType.color}`}>
+                            {pType.icon} {pType.label}
+                          </span>
+                          {latest.Authorized ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#2ecc71] bg-[#2ecc71]/10">
+                              <CheckCircle2 size={12} /> Authorized
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#e74c3c] bg-[#e74c3c]/10">
+                              <ShieldAlert size={12} /> Denied
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-4">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Location</p>
+                        <div className="flex items-center gap-1.5 text-slate-200 text-sm font-medium">
+                          <MapPin size={14} className="text-[#95a5a6] shrink-0" />
+                          <span className="truncate">{latest.Door || 'Unknown Door'}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5 pl-5">Zone: {latest.Zone || 'Unknown'}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Timestamp</p>
+                        <div className="flex items-center gap-1.5 text-slate-200 text-sm tabular-nums">
+                          <Clock size={14} className="text-[#3498db] shrink-0" />
+                          {format(new Date(latest.Time), 'dd/MM/yyyy')}
+                          <span className="font-bold text-white">{format(new Date(latest.Time), 'HH:mm:ss')}</span>
+                        </div>
+                      </div>
+
+                      {latest.Document && (
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Document</p>
+                          <p className="text-sm text-slate-200">{latest.Document}</p>
+                        </div>
+                      )}
+
+                      {latest["Card RFID"] && (
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">RFID Card</p>
+                          <div className="flex items-center gap-1.5 text-sm text-slate-200">
+                            <Fingerprint size={14} className="text-[#1abc9c] shrink-0" />
+                            {latest["Card RFID"]}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Photo Rectangle */}
+                <div className="shrink-0 w-44 relative">
+                  {latest.PersonImage ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img 
+                        src={`http://192.168.56.101:8080/web_data/images/people/${latest.PersonImage}/portrait.jpg`}
+                        alt={latest.Name}
+                        className="w-full h-full object-cover min-h-[180px]"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                      <div className="hidden w-full h-full min-h-[180px] bg-[#34495e] flex items-center justify-center text-white/50">
+                        <User size={48} />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full min-h-[180px] bg-[#34495e] flex items-center justify-center text-white/50">
+                      <User size={48} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+            );
+          })()}
+
+          <div className="flex-1 overflow-hidden relative glass-panel rounded-2xl">
+            <div 
+               className="absolute inset-0 overflow-y-auto p-2 scroll-smooth"
+               onScroll={handleScroll}
+            >
+              <AnimatePresence initial={false}>
+                {events.slice(1).map((event, i) => (
                 <motion.div
                   key={`${event.Time}-${event.Name || 'unk'}-${event.Door}-${i}`}
                   initial={{ opacity: 0, y: -20, scale: 0.95 }}
@@ -325,6 +437,7 @@ export default function LiveFeed() {
                  <Loader2 className="w-6 h-6 animate-spin text-[#3498db]" />
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
