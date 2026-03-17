@@ -3,6 +3,9 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ![logs](docs/reports.png)
 
+## Resources
+- Modern Sidebar 
+![sidebar](docs/sidebar.png)
 
 ## Getting Started
 
