@@ -29,7 +29,7 @@ interface EmployeeData {
 }
 
 const toTitleCase = (str: string) =>
-  str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
 const getPersonTypeLabel = (type: number) => {
   switch (type) {
