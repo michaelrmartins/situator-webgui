@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, ShieldAlert, CheckCircle2, Clock, MapPin, User, LogIn, LogOut, ArrowRightLeft, Briefcase, GraduationCap, Loader2, X, Fingerprint, Search } from 'lucide-react';
+import { Activity, ShieldAlert, CheckCircle2, Clock, MapPin, User, LogIn, LogOut, ArrowRightLeft, Briefcase, GraduationCap, Loader2, X, Fingerprint, Search, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface AccessEvent {
@@ -19,11 +19,16 @@ interface AccessEvent {
   Authorized: boolean;
 }
 
+interface StudentData {
+  nome_curso: string | null;
+  nome_serie: string | null;
+}
+
 const getPersonTypeLabel = (type: number) => {
-  switch(type) {
+  switch (type) {
     case 1: return { label: 'Employee', icon: <Briefcase size={12} />, color: 'text-[#3498db] bg-[#3498db]/10' }; // Peter River
     case 2: return { label: 'Student', icon: <GraduationCap size={12} />, color: 'text-[#9b59b6] bg-[#9b59b6]/10' }; // Amethyst
-    case 3: 
+    case 3:
     case 4:
     default: return { label: 'Visitor', icon: <User size={12} />, color: 'text-[#f39c12] bg-[#f39c12]/10' }; // Orange
   }
@@ -45,6 +50,10 @@ export default function LiveFeed() {
   const [personHistory, setPersonHistory] = useState<AccessEvent[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Lyceum Student Data Cache
+  const studentDataCache = useRef<Record<string, StudentData | null>>({});
+  const [studentDataMap, setStudentDataMap] = useState<Record<string, StudentData>>({});
+
   const fetchPersonHistory = async (id: string | number) => {
     setLoadingHistory(true);
     setPersonHistory([]);
@@ -60,22 +69,39 @@ export default function LiveFeed() {
     }
   };
 
+  const fetchStudentData = useCallback(async (document: string) => {
+    if (!document || document in studentDataCache.current) return;
+    studentDataCache.current[document] = null; // mark as in-flight
+    try {
+      const res = await fetch(`/api/lyceum?document=${encodeURIComponent(document)}`);
+      if (res.status === 204 || !res.ok) {
+        console.log('Lyceum API unavailable');
+        return;
+      }
+      const data: StudentData = await res.json();
+      studentDataCache.current[document] = data;
+      setStudentDataMap(prev => ({ ...prev, [document]: data }));
+    } catch {
+      console.log('Lyceum API unavailable');
+    }
+  }, []);
+
   const fetchEvents = async (pageNum: number, search: string, isPolling = false) => {
     try {
       if (pageNum > 0 && !isPolling) setIsFetchingMore(true);
       const res = await fetch(`/api/events?limit=${limit}&offset=${pageNum * limit}&search=${encodeURIComponent(search)}`);
-      
+
       if (!res.ok) {
-         const errData = await res.json();
-         throw new Error(errData.error || 'Failed to fetch');
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to fetch');
       }
-      
+
       const data = await res.json();
-      
+
       if (data.length < limit) {
-         setHasMore(false);
+        setHasMore(false);
       } else {
-         setHasMore(true);
+        setHasMore(true);
       }
 
       setEvents(prev => {
@@ -83,12 +109,12 @@ export default function LiveFeed() {
         // If it's paginating down, append unique items.
         // If search changed, completely replace.
         if (pageNum === 0) return data;
-        
+
         const existingIds = new Set(prev.map(e => `${e.Time}-${e["Card RFID"]}-${e.Door}`));
         const newEvents = data.filter((e: AccessEvent) => !existingIds.has(`${e.Time}-${e["Card RFID"]}-${e.Door}`));
         return [...prev, ...newEvents];
       });
-      
+
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -97,11 +123,20 @@ export default function LiveFeed() {
     }
   };
 
+  // Fetch Lyceum data for student events
+  useEffect(() => {
+    events.forEach(event => {
+      if (event.PersonType === 2 && event.Document) {
+        fetchStudentData(event.Document);
+      }
+    });
+  }, [events, fetchStudentData]);
+
   // Initial Load & Search
   useEffect(() => {
     // Only search if empty (reset) or >= 3 characters
     if (searchQuery.length > 0 && searchQuery.length < 3) {
-       return;
+      return;
     }
 
     setPage(0);
@@ -123,12 +158,12 @@ export default function LiveFeed() {
   // Polling Routine (Only updates the top of the list / page 0)
   useEffect(() => {
     const interval = setInterval(() => {
-       if (page === 0) {
-          // Do not poll with an incomplete search query
-          if (searchQuery.length > 0 && searchQuery.length < 3) return;
-          fetchEvents(0, searchQuery, true);
-       }
-    }, 5000); 
+      if (page === 0) {
+        // Do not poll with an incomplete search query
+        if (searchQuery.length > 0 && searchQuery.length < 3) return;
+        fetchEvents(0, searchQuery, true);
+      }
+    }, 5000);
     return () => clearInterval(interval);
   }, [searchQuery, page]);
 
@@ -156,33 +191,33 @@ export default function LiveFeed() {
             Live Access Feed
           </h1>
           <p className="text-slate-400 mt-2">
-             Real-time monitoring of all entry and exit point transactions. Updates every 5 seconds.
+            Real-time monitoring of all entry and exit point transactions. Updates every 5 seconds.
           </p>
         </div>
-        
-        <div className="flex items-center gap-4">
-           {/* Search Bar */}
-           <div className="relative group">
-             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={18} className="text-slate-400 group-focus-within:text-[#3498db] transition-colors" />
-             </div>
-             <input
-               type="text"
-               placeholder="Search Name, Doc or RFID..."
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-               className="bg-[#1e293b]/50 border border-white/5 text-white text-sm rounded-xl focus:ring-2 focus:ring-[#3498db] focus:border-transparent block w-64 pl-10 p-2.5 backdrop-blur-md transition-all placeholder:text-slate-500"
-             />
-           </div>
 
-           {/* Pulse Indicator */}
-           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2ecc71]/10 border border-[#2ecc71]/20 text-[#2ecc71] text-sm font-medium">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2ecc71] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-[#2ecc71]"></span>
-              </span>
-              Live
-           </div>
+        <div className="flex items-center gap-4">
+          {/* Search Bar */}
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={18} className="text-slate-400 group-focus-within:text-[#3498db] transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search Name, Doc or RFID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-[#1e293b]/50 border border-white/5 text-white text-sm rounded-xl focus:ring-2 focus:ring-[#3498db] focus:border-transparent block w-64 pl-10 p-2.5 backdrop-blur-md transition-all placeholder:text-slate-500"
+            />
+          </div>
+
+          {/* Pulse Indicator */}
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2ecc71]/10 border border-[#2ecc71]/20 text-[#2ecc71] text-sm font-medium">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2ecc71] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#2ecc71]"></span>
+            </span>
+            Live
+          </div>
         </div>
       </div>
 
@@ -203,240 +238,252 @@ export default function LiveFeed() {
             const latest = events[0];
             const pType = getPersonTypeLabel(latest.PersonType);
             return (
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              key={`latest-${latest.Time}-${latest.Name || 'unk'}-${latest.Door}`}
-              className="shrink-0 glass-panel rounded-2xl border border-white/10 shadow-xl overflow-hidden cursor-pointer"
-              onClick={() => {
-                if (latest.PersonId) {
-                  setSelectedPerson(latest);
-                  fetchPersonHistory(latest.PersonId);
-                }
-              }}
-            >
-              <div className="flex flex-row">
-                {/* Left: Data */}
-                <div className="flex-1 p-6 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-[#2c3e50] border border-white/10 flex items-center justify-center shrink-0">
-                        {getEventIcon(latest.Door)}
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="text-2xl font-bold text-white truncate">{latest.Name || 'Unidentified'}</h2>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold ${pType.color}`}>
-                            {pType.icon} {pType.label}
-                          </span>
-                          {latest.Authorized ? (
-                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#2ecc71] bg-[#2ecc71]/10">
-                              <CheckCircle2 size={12} /> Authorized
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={`latest-${latest.Time}-${latest.Name || 'unk'}-${latest.Door}`}
+                className="shrink-0 glass-panel rounded-2xl border border-white/10 shadow-xl overflow-hidden cursor-pointer"
+                onClick={() => {
+                  if (latest.PersonId) {
+                    setSelectedPerson(latest);
+                    fetchPersonHistory(latest.PersonId);
+                  }
+                }}
+              >
+                <div className="flex flex-row">
+                  {/* Left: Data */}
+                  <div className="flex-1 p-6 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-[#2c3e50] border border-white/10 flex items-center justify-center shrink-0">
+                          {getEventIcon(latest.Door)}
+                        </div>
+                        <div className="min-w-0">
+                          <h2 className="text-2xl font-bold text-white truncate">{latest.Name || 'Unidentified'}</h2>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold ${pType.color}`}>
+                              {pType.icon} {pType.label}
                             </span>
-                          ) : (
-                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#e74c3c] bg-[#e74c3c]/10">
-                              <ShieldAlert size={12} /> Denied
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-4">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Location</p>
-                        <div className="flex items-center gap-1.5 text-slate-200 text-sm font-medium">
-                          <MapPin size={14} className="text-[#95a5a6] shrink-0" />
-                          <span className="truncate">{latest.Door || 'Unknown Door'}</span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5 pl-5">Zone: {latest.Zone || 'Unknown'}</p>
-                      </div>
-
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Timestamp</p>
-                        <div className="flex items-center gap-1.5 text-slate-200 text-sm tabular-nums">
-                          <Clock size={14} className="text-[#3498db] shrink-0" />
-                          {format(new Date(latest.Time), 'dd/MM/yyyy')}
-                          <span className="font-bold text-white">{format(new Date(latest.Time), 'HH:mm:ss')}</span>
-                        </div>
-                      </div>
-
-                      {latest.Document && (
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Document</p>
-                          <p className="text-sm text-slate-200">{latest.Document}</p>
-                        </div>
-                      )}
-
-                      {latest["Card RFID"] && (
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">RFID Card</p>
-                          <div className="flex items-center gap-1.5 text-sm text-slate-200">
-                            <Fingerprint size={14} className="text-[#1abc9c] shrink-0" />
-                            {latest["Card RFID"]}
+                            {latest.Authorized ? (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#2ecc71] bg-[#2ecc71]/10">
+                                <CheckCircle2 size={12} /> Authorized
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#e74c3c] bg-[#e74c3c]/10">
+                                <ShieldAlert size={12} /> Denied
+                              </span>
+                            )}
+                            {latest.PersonType === 2 && latest.Document && studentDataMap[latest.Document] && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#1abc9c] bg-[#1abc9c]/10">
+                                <BookOpen size={12} />
+                                {[studentDataMap[latest.Document].nome_curso, studentDataMap[latest.Document].nome_serie].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
                           </div>
                         </div>
-                      )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-4">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Location</p>
+                          <div className="flex items-center gap-1.5 text-slate-200 text-sm font-medium">
+                            <MapPin size={14} className="text-[#95a5a6] shrink-0" />
+                            <span className="truncate">{latest.Door || 'Unknown Door'}</span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5 pl-5">Zone: {latest.Zone || 'Unknown'}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Timestamp</p>
+                          <div className="flex items-center gap-1.5 text-slate-200 text-sm tabular-nums">
+                            <Clock size={14} className="text-[#3498db] shrink-0" />
+                            {format(new Date(latest.Time), 'dd/MM/yyyy')}
+                            <span className="font-bold text-white">{format(new Date(latest.Time), 'HH:mm:ss')}</span>
+                          </div>
+                        </div>
+
+                        {latest.Document && (
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Document</p>
+                            <p className="text-sm text-slate-200">{latest.Document}</p>
+                          </div>
+                        )}
+
+                        {latest["Card RFID"] && (
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">RFID Card</p>
+                            <div className="flex items-center gap-1.5 text-sm text-slate-200">
+                              <Fingerprint size={14} className="text-[#1abc9c] shrink-0" />
+                              {latest["Card RFID"]}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Right: Photo Rectangle */}
-                <div className="shrink-0 w-44 relative">
-                  {latest.PersonImage ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
-                        src={`http://192.168.56.101:8080/web_data/images/people/${latest.PersonImage}/portrait.jpg`}
-                        alt={latest.Name}
-                        className="w-full h-full object-cover min-h-[180px]"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                        }}
-                      />
-                      <div className="hidden w-full h-full min-h-[180px] bg-[#34495e] flex items-center justify-center text-white/50">
+                  {/* Right: Photo Rectangle */}
+                  <div className="shrink-0 w-44 relative">
+                    {latest.PersonImage ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`http://192.168.56.101:8080/web_data/images/people/${latest.PersonImage}/portrait.jpg`}
+                          alt={latest.Name}
+                          className="w-full h-full object-cover min-h-[180px]"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="hidden w-full h-full min-h-[180px] bg-[#34495e] flex items-center justify-center text-white/50">
+                          <User size={48} />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-full h-full min-h-[180px] bg-[#34495e] flex items-center justify-center text-white/50">
                         <User size={48} />
                       </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full min-h-[180px] bg-[#34495e] flex items-center justify-center text-white/50">
-                      <User size={48} />
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
             );
           })()}
 
           <div className="flex-1 overflow-hidden relative glass-panel rounded-2xl">
-            <div 
-               className="absolute inset-0 overflow-y-auto p-2 scroll-smooth"
-               onScroll={handleScroll}
+            <div
+              className="absolute inset-0 overflow-y-auto p-2 scroll-smooth"
+              onScroll={handleScroll}
             >
               <AnimatePresence initial={false}>
                 {events.slice(1).map((event, i) => (
-                <motion.div
-                  key={`${event.Time}-${event.Name || 'unk'}-${event.Door}-${i}`}
-                  initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.4, type: 'spring', bounce: 0.3 }}
-                  onClick={() => {
-                    if (event.PersonId) {
-                      setSelectedPerson(event);
-                      fetchPersonHistory(event.PersonId);
-                    }
-                  }}
-                  className="mb-3 glass-card rounded-xl border border-white/5 hover:bg-white/10 transition-colors group cursor-pointer"
-                >
-                  <div className="p-4 flex items-center gap-6">
-                    {/* Status indicator */}
-                    <div className={`w-1.5 h-14 rounded-full ${event.Authorized ? 'bg-[#2ecc71] shadow-[0_0_10px_rgba(46,204,113,0.5)]' : 'bg-[#e74c3c] shadow-[0_0_10px_rgba(231,76,60,0.5)]'}`} />
-                    
-                    {/* Avatar or Icon */}
-                    <div className="relative shrink-0">
-                       {event.PersonImage ? (
-                          <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white/10 shadow-lg">
-                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                             <img 
-                                src={`http://192.168.56.101:8080/web_data/images/people/${event.PersonImage}/portrait.jpg`}
-                                alt={event.Name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                   (e.target as HTMLImageElement).style.display = 'none';
-                                   (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                                }}
-                             />
-                             <div className="hidden absolute inset-0 bg-[#34495e] flex items-center justify-center text-white/50">
-                                <User size={24} />
-                             </div>
-                          </div>
-                       ) : (
-                          <div className="w-14 h-14 rounded-full bg-[#34495e] flex items-center justify-center border-2 border-white/10 shadow-lg text-white/50">
-                             <User size={24} />
-                          </div>
-                       )}
-                       
-                       {/* Type Icon Badge */}
-                       <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#2c3e50] border border-white/10 flex items-center justify-center">
-                          {getEventIcon(event.Door)}
-                       </div>
-                    </div>
+                  <motion.div
+                    key={`${event.Time}-${event.Name || 'unk'}-${event.Door}-${i}`}
+                    initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.4, type: 'spring', bounce: 0.3 }}
+                    onClick={() => {
+                      if (event.PersonId) {
+                        setSelectedPerson(event);
+                        fetchPersonHistory(event.PersonId);
+                      }
+                    }}
+                    className="mb-3 glass-card rounded-xl border border-white/5 hover:bg-white/10 transition-colors group cursor-pointer"
+                  >
+                    <div className="p-4 flex items-center gap-6">
+                      {/* Status indicator */}
+                      <div className={`w-1.5 h-14 rounded-full ${event.Authorized ? 'bg-[#2ecc71] shadow-[0_0_10px_rgba(46,204,113,0.5)]' : 'bg-[#e74c3c] shadow-[0_0_10px_rgba(231,76,60,0.5)]'}`} />
 
-                    <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
-                       {/* Name & ID */}
-                       <div className="col-span-1 md:col-span-1 min-w-0">
-                         <div className="flex items-center gap-2 text-slate-100 font-semibold truncate text-[15px]">
-                           <span className="truncate">{event.Name || 'Unidentified'}</span>
-                         </div>
-                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                           {(() => {
+                      {/* Avatar or Icon */}
+                      <div className="relative shrink-0">
+                        {event.PersonImage ? (
+                          <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white/10 shadow-lg">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`http://192.168.56.101:8080/web_data/images/people/${event.PersonImage}/portrait.jpg`}
+                              alt={event.Name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                              }}
+                            />
+                            <div className="hidden absolute inset-0 bg-[#34495e] flex items-center justify-center text-white/50">
+                              <User size={24} />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-14 h-14 rounded-full bg-[#34495e] flex items-center justify-center border-2 border-white/10 shadow-lg text-white/50">
+                            <User size={24} />
+                          </div>
+                        )}
+
+                        {/* Type Icon Badge */}
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#2c3e50] border border-white/10 flex items-center justify-center">
+                          {getEventIcon(event.Door)}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                        {/* Name & ID */}
+                        <div className="col-span-1 md:col-span-1 min-w-0">
+                          <div className="flex items-center gap-2 text-slate-100 font-semibold truncate text-[15px]">
+                            <span className="truncate">{event.Name || 'Unidentified'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {(() => {
                               const pType = getPersonTypeLabel(event.PersonType);
                               return (
-                                 <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-wide ${pType.color}`}>
-                                    {pType.icon} {pType.label}
-                                 </span>
+                                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-wide ${pType.color}`}>
+                                  {pType.icon} {pType.label}
+                                </span>
                               );
-                           })()}
-                           {event.Document && <span className="text-[11px] text-[#95a5a6] px-1">Doc: {event.Document}</span>} 
-                           {event["Card RFID"] && (
-                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-300 bg-slate-800/80 border border-white/5">
-                                 <Fingerprint size={12} className="text-[#1abc9c]" />
-                                 {event["Card RFID"]}
+                            })()}
+                            {event.Document && <span className="text-[11px] text-[#95a5a6] px-1">Doc: {event.Document}</span>}
+                            {event.PersonType === 2 && event.Document && studentDataMap[event.Document] && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold text-[#1abc9c] bg-[#1abc9c]/10 tracking-wide">
+                                <BookOpen size={11} />
+                                {[studentDataMap[event.Document].nome_curso, studentDataMap[event.Document].nome_serie].filter(Boolean).join(' · ')}
                               </span>
-                           )}
-                         </div>
-                       </div>
+                            )}
+                            {event["Card RFID"] && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-300 bg-slate-800/80 border border-white/5">
+                                <Fingerprint size={12} className="text-[#1abc9c]" />
+                                {event["Card RFID"]}
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
-                       {/* Location */}
-                       <div className="col-span-1 min-w-0">
-                         <div className="flex items-center gap-2 text-slate-300 text-sm truncate font-medium">
-                           <MapPin size={14} className="text-[#95a5a6] shrink-0" />
-                           <span className="truncate">{event.Door || 'Unknown Door'}</span>
-                         </div>
-                         <div className="text-[12px] text-[#7f8c8d] mt-1 truncate pl-5">
-                           Zone: {event.Zone || 'Unknown'}
-                         </div>
-                       </div>
+                        {/* Location */}
+                        <div className="col-span-1 min-w-0">
+                          <div className="flex items-center gap-2 text-slate-300 text-sm truncate font-medium">
+                            <MapPin size={14} className="text-[#95a5a6] shrink-0" />
+                            <span className="truncate">{event.Door || 'Unknown Door'}</span>
+                          </div>
+                          <div className="text-[12px] text-[#7f8c8d] mt-1 truncate pl-5">
+                            Zone: {event.Zone || 'Unknown'}
+                          </div>
+                        </div>
 
-                       {/* Time */}
-                       <div className="col-span-1 flex items-center gap-2 text-[#bdc3c7] text-sm tabular-nums tracking-tight">
-                         <Clock size={14} className="text-[#7f8c8d]" />
-                         {format(new Date(event.Time), 'dd/MM/yyyy HH:mm:ss')}
-                       </div>
+                        {/* Time */}
+                        <div className="col-span-1 flex items-center gap-2 text-[#bdc3c7] text-sm tabular-nums tracking-tight">
+                          <Clock size={14} className="text-[#7f8c8d]" />
+                          {format(new Date(event.Time), 'dd/MM/yyyy HH:mm:ss')}
+                        </div>
 
-                       {/* Authorization */}
-                       <div className="col-span-1 flex justify-end">
-                         {event.Authorized ? (
-                           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2ecc71]/10 border border-[#2ecc71]/20 text-[#2ecc71] text-[13px] font-semibold tracking-wide shadow-sm">
-                             <CheckCircle2 size={16} />
-                             Authorized
-                           </div>
-                         ) : (
-                           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#e74c3c]/10 border border-[#e74c3c]/20 text-[#e74c3c] text-[13px] font-semibold tracking-wide shadow-sm">
-                             <ShieldAlert size={16} />
-                             Denied
-                           </div>
-                         )}
-                       </div>
+                        {/* Authorization */}
+                        <div className="col-span-1 flex justify-end">
+                          {event.Authorized ? (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#2ecc71]/10 border border-[#2ecc71]/20 text-[#2ecc71] text-[13px] font-semibold tracking-wide shadow-sm">
+                              <CheckCircle2 size={16} />
+                              Authorized
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#e74c3c]/10 border border-[#e74c3c]/20 text-[#e74c3c] text-[13px] font-semibold tracking-wide shadow-sm">
+                              <ShieldAlert size={16} />
+                              Denied
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
 
-            {events.length === 0 && !error && !isFetchingMore && (
-              <div className="h-40 flex items-center justify-center text-slate-500">
-                 {searchQuery ? 'No results found for your search.' : 'Waiting for access events...'}
-              </div>
-            )}
-            
-            {isFetchingMore && (
-              <div className="py-6 flex items-center justify-center">
-                 <Loader2 className="w-6 h-6 animate-spin text-[#3498db]" />
-              </div>
-            )}
+              {events.length === 0 && !error && !isFetchingMore && (
+                <div className="h-40 flex items-center justify-center text-slate-500">
+                  {searchQuery ? 'No results found for your search.' : 'Waiting for access events...'}
+                </div>
+              )}
+
+              {isFetchingMore && (
+                <div className="py-6 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#3498db]" />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -445,21 +492,21 @@ export default function LiveFeed() {
       {/* Person Details Modal */}
       <AnimatePresence>
         {selectedPerson && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSelectedPerson(null)}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
               className="relative glass-panel w-full max-w-2xl max-h-[85vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl border-white/10"
             >
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); setSelectedPerson(null); }}
                 className="absolute top-6 right-6 p-2 rounded-full bg-black/20 hover:bg-black/40 text-slate-300 hover:text-white transition-colors z-50 backdrop-blur-md border border-white/10"
               >
@@ -472,7 +519,7 @@ export default function LiveFeed() {
                   {selectedPerson.PersonImage ? (
                     <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-[#3498db]/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] bg-slate-900">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
+                      <img
                         src={`http://192.168.56.101:8080/web_data/images/people/${selectedPerson.PersonImage}/portrait.jpg`}
                         alt={selectedPerson.Name}
                         className="w-full h-full object-cover"
@@ -491,28 +538,28 @@ export default function LiveFeed() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex-1 text-center sm:text-left pt-3 relative z-10">
                   <h2 className="text-2xl font-bold text-white mb-3 line-clamp-2">{selectedPerson.Name || 'Unidentified'}</h2>
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-slate-300">
                     {(() => {
-                        const pType = getPersonTypeLabel(selectedPerson.PersonType);
-                        return (
-                          <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold ${pType.color}`}>
-                            {pType.icon} {pType.label}
-                          </span>
-                        );
+                      const pType = getPersonTypeLabel(selectedPerson.PersonType);
+                      return (
+                        <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold ${pType.color}`}>
+                          {pType.icon} {pType.label}
+                        </span>
+                      );
                     })()}
                     {selectedPerson.Document && (
-                       <span className="text-sm px-3 py-1.5 bg-slate-700/50 rounded-lg text-slate-300 border border-white/5">
-                          Doc: {selectedPerson.Document}
-                       </span>
+                      <span className="text-sm px-3 py-1.5 bg-slate-700/50 rounded-lg text-slate-300 border border-white/5">
+                        Doc: {selectedPerson.Document}
+                      </span>
                     )}
                     {selectedPerson["Card RFID"] && (
-                       <span className="flex items-center gap-2 text-sm px-3 py-1.5 bg-slate-800/80 rounded-lg text-slate-200 border border-white/10 shadow-inner">
-                          <Fingerprint size={16} className="text-[#1abc9c]" />
-                          RFID: {selectedPerson["Card RFID"]}
-                       </span>
+                      <span className="flex items-center gap-2 text-sm px-3 py-1.5 bg-slate-800/80 rounded-lg text-slate-200 border border-white/10 shadow-inner">
+                        <Fingerprint size={16} className="text-[#1abc9c]" />
+                        RFID: {selectedPerson["Card RFID"]}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -523,7 +570,7 @@ export default function LiveFeed() {
                 <h3 className="text-lg font-semibold text-slate-200 mb-6 flex items-center gap-2">
                   <Clock size={20} className="text-[#3498db]" /> Recent History (Last 10)
                 </h3>
-                
+
                 {loadingHistory ? (
                   <div className="py-12 flex justify-center">
                     <Loader2 className="w-8 h-8 animate-spin text-[#3498db]" />
