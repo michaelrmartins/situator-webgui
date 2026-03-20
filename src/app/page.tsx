@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, ShieldAlert, CheckCircle2, Clock, MapPin, User, LogIn, LogOut, ArrowRightLeft, Briefcase, GraduationCap, Loader2, X, Fingerprint, Search, BookOpen } from 'lucide-react';
+import { Activity, ShieldAlert, CheckCircle2, Clock, MapPin, User, LogIn, LogOut, ArrowRightLeft, Briefcase, GraduationCap, Loader2, X, Fingerprint, Search, BookOpen, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface AccessEvent {
@@ -23,6 +23,13 @@ interface StudentData {
   nome_curso: string | null;
   nome_serie: string | null;
 }
+
+interface EmployeeData {
+  departamento: string;
+}
+
+const toTitleCase = (str: string) =>
+  str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
 const getPersonTypeLabel = (type: number) => {
   switch (type) {
@@ -54,6 +61,10 @@ export default function LiveFeed() {
   const studentDataCache = useRef<Record<string, StudentData | null>>({});
   const [studentDataMap, setStudentDataMap] = useState<Record<string, StudentData>>({});
 
+  // Nasajon Employee Data Cache
+  const employeeDataCache = useRef<Record<string, EmployeeData | null>>({});
+  const [employeeDataMap, setEmployeeDataMap] = useState<Record<string, EmployeeData>>({});
+
   const fetchPersonHistory = async (id: string | number) => {
     setLoadingHistory(true);
     setPersonHistory([]);
@@ -83,6 +94,23 @@ export default function LiveFeed() {
       setStudentDataMap(prev => ({ ...prev, [document]: data }));
     } catch {
       console.log('Lyceum API unavailable');
+    }
+  }, []);
+
+  const fetchEmployeeData = useCallback(async (document: string) => {
+    if (!document || document in employeeDataCache.current) return;
+    employeeDataCache.current[document] = null; // mark as in-flight
+    try {
+      const res = await fetch(`/api/nasajon?document=${encodeURIComponent(document)}`);
+      if (res.status === 204 || !res.ok) {
+        console.log('Nasajon API unavailable');
+        return;
+      }
+      const data: EmployeeData = await res.json();
+      employeeDataCache.current[document] = data;
+      setEmployeeDataMap(prev => ({ ...prev, [document]: data }));
+    } catch {
+      console.log('Nasajon API unavailable');
     }
   }, []);
 
@@ -123,14 +151,16 @@ export default function LiveFeed() {
     }
   };
 
-  // Fetch Lyceum data for student events
+  // Fetch Lyceum data for student events and Nasajon data for employee events
   useEffect(() => {
     events.forEach(event => {
       if (event.PersonType === 2 && event.Document) {
         fetchStudentData(event.Document);
+      } else if (event.PersonType === 1 && event.Document) {
+        fetchEmployeeData(event.Document);
       }
     });
-  }, [events, fetchStudentData]);
+  }, [events, fetchStudentData, fetchEmployeeData]);
 
   // Initial Load & Search
   useEffect(() => {
@@ -279,6 +309,12 @@ export default function LiveFeed() {
                                 {[studentDataMap[latest.Document].nome_curso, studentDataMap[latest.Document].nome_serie].filter(Boolean).join(' · ')}
                               </span>
                             )}
+                            {latest.PersonType === 1 && latest.Document && employeeDataMap[latest.Document] && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold text-[#3498db] bg-[#3498db]/10">
+                                <Building2 size={12} />
+                                {toTitleCase(employeeDataMap[latest.Document].departamento)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -425,6 +461,12 @@ export default function LiveFeed() {
                               <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold text-[#1abc9c] bg-[#1abc9c]/10 tracking-wide">
                                 <BookOpen size={11} />
                                 {[studentDataMap[event.Document].nome_curso, studentDataMap[event.Document].nome_serie].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                            {event.PersonType === 1 && event.Document && employeeDataMap[event.Document] && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold text-[#3498db] bg-[#3498db]/10 tracking-wide">
+                                <Building2 size={11} />
+                                {toTitleCase(employeeDataMap[event.Document].departamento)}
                               </span>
                             )}
                             {event["Card RFID"] && (
