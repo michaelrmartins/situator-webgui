@@ -556,7 +556,7 @@ export default function LiveFeed() {
               </button>
 
               {/* Header with Photo */}
-              <div className="p-8 border-b border-white/10 flex flex-col sm:flex-row items-center sm:items-start gap-8 bg-slate-800/40 relative overflow-hidden">
+              <div className="shrink-0 p-8 border-b border-white/10 flex flex-col sm:flex-row items-center sm:items-start gap-8 bg-slate-800/40 relative overflow-hidden">
                 <div className="shrink-0 relative z-10">
                   {selectedPerson.PersonImage ? (
                     <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-[#3498db]/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] bg-slate-900">

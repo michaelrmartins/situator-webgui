@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info, Users, Download, BookOpen, Building2, FileText } from 'lucide-react';
+import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info, Users, Download, BookOpen, Building2, FileText, X, User, Clock } from 'lucide-react';
 import { startOfDay, endOfDay, subDays, format } from 'date-fns';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -33,6 +33,11 @@ export default function LogsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Modal States
+  const [selectedPerson, setSelectedPerson] = useState<any | null>(null);
+  const [personHistory, setPersonHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Lyceum Student Data Cache
   const studentDataCache = useRef<Record<string, StudentData | null>>({});
@@ -88,6 +93,21 @@ export default function LogsPage() {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchPersonHistory = async (id: string | number) => {
+    setLoadingHistory(true);
+    setPersonHistory([]);
+    try {
+      const res = await fetch(`/api/person-history?id=${id}&limit=10`);
+      if (res.ok) {
+        setPersonHistory(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -396,7 +416,16 @@ export default function LogsPage() {
                     const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
                     
                     return (
-                      <tr key={person.PersonId || idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <tr 
+                        key={person.PersonId || idx} 
+                        onClick={() => {
+                          if (person.PersonId) {
+                            setSelectedPerson(person);
+                            fetchPersonHistory(person.PersonId);
+                          }
+                        }}
+                        className="border-b border-white/5 hover:bg-white/10 transition-colors cursor-pointer group"
+                      >
                         <td className="px-6 py-2">
                            {person.PersonImage ? (
                              // eslint-disable-next-line @next/next/no-img-element
@@ -463,6 +492,148 @@ export default function LogsPage() {
             </p>
          </div>
       </div>
+
+      {/* Person Details Modal */}
+      <AnimatePresence>
+        {selectedPerson && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedPerson(null)}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative glass-panel w-full max-w-2xl max-h-[85vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl border-white/10"
+            >
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedPerson(null); }}
+                className="absolute top-6 right-6 p-2 rounded-full bg-black/20 hover:bg-black/40 text-slate-300 hover:text-white transition-colors z-[110] backdrop-blur-md border border-white/10"
+              >
+                <X size={24} />
+              </button>
+
+              {/* Header with Photo */}
+              <div className="shrink-0 p-8 border-b border-white/10 flex flex-col sm:flex-row items-center sm:items-start gap-8 bg-slate-800/40 relative overflow-hidden">
+                <div className="shrink-0 relative z-10">
+                  {selectedPerson.PersonImage ? (
+                    <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-[#3498db]/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] bg-slate-900">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`http://192.168.56.101:8080/web_data/images/people/${selectedPerson.PersonImage}/portrait.jpg`}
+                        alt={selectedPerson.Name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                      <div className="hidden absolute inset-0 bg-[#34495e] flex items-center justify-center text-white/50">
+                        <User size={64} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-40 h-40 rounded-full bg-[#34495e] flex items-center justify-center border-4 border-white/10 shadow-2xl text-white/50 relative z-10">
+                      <User size={64} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 text-center sm:text-left pt-3 relative z-10">
+                  <h2 className="text-2xl font-bold text-white mb-3 line-clamp-2">{selectedPerson.Name || 'Unidentified'}</h2>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-slate-300">
+                    {(() => {
+                      const typeLower = String(selectedPerson.PersonType || '').toLowerCase();
+                      const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
+                      return (
+                        <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold ${isStudent ? 'text-[#9b59b6] bg-[#9b59b6]/10 border border-[#9b59b6]/20' : 'text-[#3498db] bg-[#3498db]/10 border border-[#3498db]/20'}`}>
+                          {isStudent ? <BookOpen size={16} /> : <Building2 size={16} />} 
+                          {isStudent ? 'Student' : 'Employee'}
+                        </span>
+                      );
+                    })()}
+                    {selectedPerson.Matricula && (
+                      <span className="text-sm px-3 py-1.5 bg-slate-700/50 rounded-lg text-slate-300 border border-white/5">
+                        Registration: {selectedPerson.Matricula}
+                      </span>
+                    )}
+
+                    {(() => {
+                        const typeLower = String(selectedPerson.PersonType || '').toLowerCase();
+                        const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
+                        
+                        if (isStudent && selectedPerson.Matricula && studentDataMap[selectedPerson.Matricula]) {
+                            const info = [studentDataMap[selectedPerson.Matricula].nome_curso, studentDataMap[selectedPerson.Matricula].nome_serie].filter(Boolean).join(' · ');
+                            if (info) {
+                                return (
+                                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-[#1abc9c] bg-[#1abc9c]/10 border border-[#1abc9c]/20">
+                                        <BookOpen size={16} />
+                                        {info}
+                                    </span>
+                                )
+                            }
+                        } else if (!isStudent && selectedPerson.Matricula && employeeDataMap[selectedPerson.Matricula]) {
+                            const info = toTitleCase(employeeDataMap[selectedPerson.Matricula].departamento);
+                            if (info) {
+                                return (
+                                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-[#3498db] bg-[#3498db]/10 border border-[#3498db]/20">
+                                        <Building2 size={16} />
+                                        {info}
+                                    </span>
+                                )
+                            }
+                        }
+                        return null;
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* History List */}
+              <div className="p-6 overflow-y-auto flex-1 bg-slate-900/20">
+                <h3 className="text-lg font-semibold text-slate-200 mb-6 flex items-center gap-2">
+                  <Clock size={20} className="text-[#3498db]" /> Recent History (Last 10)
+                </h3>
+
+                {loadingHistory ? (
+                  <div className="py-12 flex justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-[#3498db]" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {personHistory.map((histEvent, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-white/5 hover:bg-slate-800/50 transition-colors gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className={`shrink-0 w-2.5 h-10 rounded-full ${histEvent.Authorized ? 'bg-[#2ecc71]' : 'bg-[#e74c3c]'}`} />
+                          <div>
+                            <p className="text-slate-200 font-medium truncate max-w-[200px]">{histEvent.Door || 'Unknown Door'}</p>
+                            <p className="text-sm text-slate-400">Zone: {histEvent.Zone || 'Unknown'}</p>
+                          </div>
+                        </div>
+                        <div className="text-left sm:text-right shrink-0">
+                          <p className="text-sm font-semibold text-slate-300">
+                            {format(new Date(histEvent.Time), 'dd/MM/yyyy')}
+                          </p>
+                          <p className="text-xs font-medium text-slate-400 mt-0.5">
+                            {format(new Date(histEvent.Time), 'HH:mm:ss')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {personHistory.length === 0 && (
+                      <p className="text-center text-slate-400 py-8">No recent history found.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
