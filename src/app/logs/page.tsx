@@ -25,6 +25,7 @@ export default function LogsPage() {
     start: startOfDay(new Date()),
     end: endOfDay(new Date())
   });
+  const [activeDateFilter, setActiveDateFilter] = useState(0);
 
   const [authData, setAuthData] = useState<any[]>([]);
   const [rfidData, setRfidData] = useState<any[]>([]);
@@ -137,6 +138,7 @@ export default function LogsPage() {
   }, [noRfidData, fetchStudentData, fetchEmployeeData]);
 
   const handleDateChange = (daysAgo: number) => {
+    setActiveDateFilter(daysAgo);
     const start = startOfDay(subDays(new Date(), daysAgo));
     const end = endOfDay(new Date());
     setDateRange({ start, end });
@@ -307,12 +309,12 @@ export default function LogsPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent flex items-center gap-3 flex-wrap">
             <ShieldAlert className="text-blue-400" size={32} />
             Authorization & Verification Logs
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)] ml-2">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)] ml-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="text-red-400 font-bold tracking-wider uppercase text-[10px]">Live</span>
+              <span className="text-emerald-400 font-bold tracking-wider uppercase text-[10px]">Live</span>
             </div>
           </h1>
           <p className="text-slate-400 mt-2">
@@ -321,9 +323,9 @@ export default function LogsPage() {
         </div>
         
         <div className="flex bg-slate-800/50 p-1 rounded-xl border border-white/5 backdrop-blur-md">
-          <button onClick={() => handleDateChange(0)} className="px-4 py-2 text-sm font-medium rounded-lg text-white hover:bg-white/10 focus:bg-blue-600 transition-all flex items-center gap-2"><CalendarDays size={16} /> Today</button>
-          <button onClick={() => handleDateChange(7)} className="px-4 py-2 text-sm font-medium rounded-lg text-slate-300 hover:bg-white/10 focus:bg-blue-600 transition-all">7 Days</button>
-          <button onClick={() => handleDateChange(30)} className="px-4 py-2 text-sm font-medium rounded-lg text-slate-300 hover:bg-white/10 focus:bg-blue-600 transition-all">30 Days</button>
+          <button onClick={() => handleDateChange(0)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 ${activeDateFilter === 0 ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}><CalendarDays size={16} /> Today</button>
+          <button onClick={() => handleDateChange(7)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeDateFilter === 7 ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}>7 Days</button>
+          <button onClick={() => handleDateChange(30)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeDateFilter === 30 ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}>30 Days</button>
         </div>
       </div>
 
