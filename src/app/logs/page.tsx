@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info, Users, Download, BookOpen, Building2 } from 'lucide-react';
+import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info, Users, Download, BookOpen, Building2, FileText } from 'lucide-react';
 import { startOfDay, endOfDay, subDays, format } from 'date-fns';
 import { motion } from 'framer-motion';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface StudentData {
   nome_curso: string | null;
@@ -24,12 +26,13 @@ export default function LogsPage() {
     end: endOfDay(new Date())
   });
 
-  const [authData, setAuthData] = useState([]);
-  const [rfidData, setRfidData] = useState([]);
-  const [noRfidData, setNoRfidData] = useState([]);
+  const [authData, setAuthData] = useState<any[]>([]);
+  const [rfidData, setRfidData] = useState<any[]>([]);
+  const [noRfidData, setNoRfidData] = useState<any[]>([]);
   const [filterType, setFilterType] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Lyceum Student Data Cache
   const studentDataCache = useRef<Record<string, StudentData | null>>({});
@@ -186,6 +189,89 @@ export default function LogsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(imageUrl)}`);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          resolve(reader.result as string);
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (filteredNoRfidData.length === 0) return;
+    setIsExporting(true);
+
+    try {
+      const doc = new jsPDF();
+      doc.text("Missing RFID Accesses", 14, 15);
+      
+      const head = [["Photo", "Name", "Registration", "Type / Details"]];
+      const body: any[] = [];
+      const cachedImages: Record<number, string> = {};
+
+      for (let i = 0; i < filteredNoRfidData.length; i++) {
+        const person = filteredNoRfidData[i];
+        const typeLower = String(person.PersonType || '').toLowerCase();
+        const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
+        
+        let typeDetails = isStudent ? 'Student' : 'Employee';
+        if (isStudent && person.Matricula && studentDataMap[person.Matricula]) {
+          const studentInfo = [studentDataMap[person.Matricula].nome_curso, studentDataMap[person.Matricula].nome_serie].filter(Boolean).join(' - ');
+          if (studentInfo) typeDetails += `\n${studentInfo}`;
+        } else if (!isStudent && person.Matricula && employeeDataMap[person.Matricula]) {
+          const employeeInfo = toTitleCase(employeeDataMap[person.Matricula].departamento);
+          if (employeeInfo) typeDetails += `\n${employeeInfo}`;
+        }
+
+        body.push(["", person.Name, person.Matricula || 'N/A', typeDetails]);
+
+        if (person.PersonImage) {
+          const b64 = await getBase64ImageFromUrl(`http://192.168.56.101:8080/web_data/images/people/${person.PersonImage}/portrait.jpg`);
+          if (b64) cachedImages[i] = b64;
+        }
+      }
+
+      autoTable(doc, {
+        head,
+        body,
+        startY: 20,
+        styles: { fontSize: 10, cellPadding: 3 },
+        bodyStyles: { minCellHeight: 18, valign: 'middle' },
+        columnStyles: { 0: { cellWidth: 20 } },
+        didDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 0) {
+            const b64 = cachedImages[data.row.index];
+            if (b64) {
+              const x = data.cell.x + 2;
+              const y = data.cell.y + 2;
+              const w = 14;
+              const h = 14;
+              // using standard jsPDF properties
+              doc.addImage(b64, 'JPEG', x, y, w, h);
+            }
+          }
+        }
+      });
+      
+      doc.save(`missing_rfid_records_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.pdf`);
+    } catch (e) {
+      console.error("PDF generation failed:", e);
+      alert("Failed to construct PDF.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="p-8 h-full flex flex-col overflow-y-auto">
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -251,6 +337,15 @@ export default function LogsPage() {
             </div>
             
             <div className="flex items-center gap-3">
+              <button 
+                onClick={handleExportPDF}
+                disabled={filteredNoRfidData.length === 0 || isLoading || isExporting}
+                className="flex items-center gap-2 px-4 py-2.5 bg-red-600/20 text-red-400 hover:bg-red-600/30 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed border border-red-500/20 rounded-lg text-sm font-medium transition-all"
+              >
+                {isExporting ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                Export PDF
+              </button>
+
               <button 
                 onClick={handleExportCSV}
                 disabled={filteredNoRfidData.length === 0 || isLoading}
