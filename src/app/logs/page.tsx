@@ -71,9 +71,9 @@ export default function LogsPage() {
     } catch {}
   }, []);
 
-  const fetchLogs = async () => {
-    setIsLoading(true);
-    setError(null);
+  const fetchLogs = async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    if (!silent) setError(null);
     try {
       const startMs = dateRange.start.getTime();
       const endMs = dateRange.end.getTime();
@@ -90,9 +90,9 @@ export default function LogsPage() {
       setRfidData(await rfidRes.json());
       setNoRfidData(await noRfidRes.json());
     } catch (err: any) {
-      setError(err.message);
+      if (!silent) setError(err.message);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -113,6 +113,14 @@ export default function LogsPage() {
 
   useEffect(() => {
     fetchLogs();
+
+    // Auto-reload data every 5 seconds
+    const interval = setInterval(() => {
+      fetchLogs(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange]);
 
   useEffect(() => {
@@ -296,12 +304,19 @@ export default function LogsPage() {
     <div className="p-8 h-full flex flex-col overflow-y-auto">
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent flex items-center gap-3">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent flex items-center gap-3 flex-wrap">
             <ShieldAlert className="text-blue-400" size={32} />
             Authorization & Verification Logs
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)] ml-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              <span className="text-red-400 font-bold tracking-wider uppercase text-[10px]">Live</span>
+            </div>
           </h1>
           <p className="text-slate-400 mt-2">
-            Analysis of unauthorized attempts and physical card presence.
+            Analysis of unauthorized attempts and physical card presence. Auto-refreshing every 5 seconds.
           </p>
         </div>
         
