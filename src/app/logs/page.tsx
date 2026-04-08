@@ -1,10 +1,22 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info, Users, Download } from 'lucide-react';
+import { ShieldAlert, Fingerprint, CalendarDays, Loader2, Info, Users, Download, BookOpen, Building2 } from 'lucide-react';
 import { startOfDay, endOfDay, subDays, format } from 'date-fns';
 import { motion } from 'framer-motion';
+
+interface StudentData {
+  nome_curso: string | null;
+  nome_serie: string | null;
+}
+
+interface EmployeeData {
+  departamento: string;
+}
+
+const toTitleCase = (str: string) =>
+  str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
 export default function LogsPage() {
   const [dateRange, setDateRange] = useState({
@@ -18,6 +30,38 @@ export default function LogsPage() {
   const [filterType, setFilterType] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Lyceum Student Data Cache
+  const studentDataCache = useRef<Record<string, StudentData | null>>({});
+  const [studentDataMap, setStudentDataMap] = useState<Record<string, StudentData>>({});
+
+  // Nasajon Employee Data Cache
+  const employeeDataCache = useRef<Record<string, EmployeeData | null>>({});
+  const [employeeDataMap, setEmployeeDataMap] = useState<Record<string, EmployeeData>>({});
+
+  const fetchStudentData = useCallback(async (document: string) => {
+    if (!document || document in studentDataCache.current) return;
+    studentDataCache.current[document] = null; // mark as in-flight
+    try {
+      const res = await fetch(`/api/lyceum?document=${encodeURIComponent(document)}`);
+      if (res.status === 204 || !res.ok) return;
+      const data: StudentData = await res.json();
+      studentDataCache.current[document] = data;
+      setStudentDataMap(prev => ({ ...prev, [document]: data }));
+    } catch {}
+  }, []);
+
+  const fetchEmployeeData = useCallback(async (document: string) => {
+    if (!document || document in employeeDataCache.current) return;
+    employeeDataCache.current[document] = null; // mark as in-flight
+    try {
+      const res = await fetch(`/api/nasajon?document=${encodeURIComponent(document)}`);
+      if (res.status === 204 || !res.ok) return;
+      const data: EmployeeData = await res.json();
+      employeeDataCache.current[document] = data;
+      setEmployeeDataMap(prev => ({ ...prev, [document]: data }));
+    } catch {}
+  }, []);
 
   const fetchLogs = async () => {
     setIsLoading(true);
@@ -47,6 +91,19 @@ export default function LogsPage() {
   useEffect(() => {
     fetchLogs();
   }, [dateRange]);
+
+  useEffect(() => {
+    noRfidData.forEach((person: any) => {
+      const typeLower = String(person.PersonType || '').toLowerCase();
+      const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
+      const document = person.Matricula;
+      if (isStudent && document) {
+        fetchStudentData(document);
+      } else if (!isStudent && document) {
+        fetchEmployeeData(document);
+      }
+    });
+  }, [noRfidData, fetchStudentData, fetchEmployeeData]);
 
   const handleDateChange = (daysAgo: number) => {
     const start = startOfDay(subDays(new Date(), daysAgo));
@@ -222,7 +279,7 @@ export default function LogsPage() {
                   <th scope="col" className="px-6 py-2 rounded-tl-lg">Photo</th>
                   <th scope="col" className="px-6 py-2">Name</th>
                   <th scope="col" className="px-6 py-2">Registration</th>
-                  <th scope="col" className="px-6 py-2 rounded-tr-lg">Type</th>
+                  <th scope="col" className="px-6 py-2 rounded-tr-lg">Type & Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,13 +326,27 @@ export default function LogsPage() {
                         <td className="px-6 py-2 font-medium text-slate-200">{person.Name}</td>
                         <td className="px-6 py-2">{person.Matricula || 'N/A'}</td>
                         <td className="px-6 py-2">
-                           <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                             isStudent
-                             ? 'text-[#9b59b6] bg-[#9b59b6]/10 border border-[#9b59b6]/20'
-                             : 'text-[#3498db] bg-[#3498db]/10 border border-[#3498db]/20'
-                           }`}>
-                             {isStudent ? 'Student' : 'Employee'}
-                           </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                             <span className={`flex items-center px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${
+                               isStudent
+                               ? 'text-[#9b59b6] bg-[#9b59b6]/10 border border-[#9b59b6]/20'
+                               : 'text-[#3498db] bg-[#3498db]/10 border border-[#3498db]/20'
+                             }`}>
+                               {isStudent ? 'Student' : 'Employee'}
+                             </span>
+                             {isStudent && person.Matricula && studentDataMap[person.Matricula] && (
+                               <span className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-[#1abc9c] bg-[#1abc9c]/10 tracking-wide border border-[#1abc9c]/20">
+                                 <BookOpen size={12} className="shrink-0" />
+                                 {[studentDataMap[person.Matricula].nome_curso, studentDataMap[person.Matricula].nome_serie].filter(Boolean).join(' · ')}
+                               </span>
+                             )}
+                             {!isStudent && person.Matricula && employeeDataMap[person.Matricula] && (
+                               <span className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-[#3498db] bg-[#3498db]/10 tracking-wide border border-[#3498db]/20">
+                                 <Building2 size={12} className="shrink-0" />
+                                 {toTitleCase(employeeDataMap[person.Matricula].departamento)}
+                               </span>
+                             )}
+                          </div>
                         </td>
                       </tr>
                     );
