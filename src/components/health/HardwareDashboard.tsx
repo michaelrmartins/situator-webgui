@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ReactECharts from "echarts-for-react";
 
 interface HardwareStats {
@@ -18,8 +18,17 @@ export default function HardwareDashboard() {
   const [syncBottlenecks, setSyncBottlenecks] = useState<SyncStats[]>([]);
   const [globalDowntime, setGlobalDowntime] = useState(0);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
-    fetch("/api/health/hardware")
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/health/hardware", { cache: 'no-store', signal: abortControllerRef.current?.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) {

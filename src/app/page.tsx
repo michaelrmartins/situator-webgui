@@ -65,16 +65,29 @@ export default function LiveFeed() {
   const employeeDataCache = useRef<Record<string, EmployeeData | null>>({});
   const [employeeDataMap, setEmployeeDataMap] = useState<Record<string, EmployeeData>>({});
 
+  // AbortController to cancel all in-flight requests on unmount
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Create a fresh AbortController on mount, abort on unmount
+  useEffect(() => {
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const getSignal = () => abortControllerRef.current?.signal;
+
   const fetchPersonHistory = async (id: string | number) => {
     setLoadingHistory(true);
     setPersonHistory([]);
     try {
-      const res = await fetch(`/api/person-history?id=${id}&limit=10`);
+      const res = await fetch(`/api/person-history?id=${id}&limit=10`, { cache: 'no-store', signal: getSignal() });
       if (res.ok) {
         setPersonHistory(await res.json());
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') console.error(e);
     } finally {
       setLoadingHistory(false);
     }
@@ -84,16 +97,15 @@ export default function LiveFeed() {
     if (!document || document in studentDataCache.current) return;
     studentDataCache.current[document] = null; // mark as in-flight
     try {
-      const res = await fetch(`/api/lyceum?document=${encodeURIComponent(document)}`);
+      const res = await fetch(`/api/lyceum?document=${encodeURIComponent(document)}`, { cache: 'no-store', signal: getSignal() });
       if (res.status === 204 || !res.ok) {
-        console.log('Lyceum API unavailable');
         return;
       }
       const data: StudentData = await res.json();
       studentDataCache.current[document] = data;
       setStudentDataMap(prev => ({ ...prev, [document]: data }));
-    } catch {
-      console.log('Lyceum API unavailable');
+    } catch (e: any) {
+      if (e.name !== 'AbortError') console.log('Lyceum API unavailable');
     }
   }, []);
 
@@ -101,23 +113,22 @@ export default function LiveFeed() {
     if (!document || document in employeeDataCache.current) return;
     employeeDataCache.current[document] = null; // mark as in-flight
     try {
-      const res = await fetch(`/api/nasajon?document=${encodeURIComponent(document)}`);
+      const res = await fetch(`/api/nasajon?document=${encodeURIComponent(document)}`, { cache: 'no-store', signal: getSignal() });
       if (res.status === 204 || !res.ok) {
-        console.log('Nasajon API unavailable');
         return;
       }
       const data: EmployeeData = await res.json();
       employeeDataCache.current[document] = data;
       setEmployeeDataMap(prev => ({ ...prev, [document]: data }));
-    } catch {
-      console.log('Nasajon API unavailable');
+    } catch (e: any) {
+      if (e.name !== 'AbortError') console.log('Nasajon API unavailable');
     }
   }, []);
 
   const fetchEvents = async (pageNum: number, search: string, isPolling = false) => {
     try {
       if (pageNum > 0 && !isPolling) setIsFetchingMore(true);
-      const res = await fetch(`/api/events?limit=${limit}&offset=${pageNum * limit}&search=${encodeURIComponent(search)}`);
+      const res = await fetch(`/api/events?limit=${limit}&offset=${pageNum * limit}&search=${encodeURIComponent(search)}`, { cache: 'no-store', signal: getSignal() });
 
       if (!res.ok) {
         const errData = await res.json();
@@ -145,21 +156,28 @@ export default function LiveFeed() {
 
       setError(null);
     } catch (err: any) {
-      setError(err.message);
+      if (err.name !== 'AbortError') setError(err.message);
     } finally {
       setIsFetchingMore(false);
     }
   };
 
   // Fetch Lyceum data for student events and Nasajon data for employee events
+  // Process sequentially in batches to avoid saturating browser connections
   useEffect(() => {
-    events.forEach(event => {
-      if (event.PersonType === 2 && event.Document) {
-        fetchStudentData(event.Document);
-      } else if (event.PersonType === 1 && event.Document) {
-        fetchEmployeeData(event.Document);
+    let cancelled = false;
+    const fetchExtras = async () => {
+      for (const event of events) {
+        if (cancelled) break;
+        if (event.PersonType === 2 && event.Document) {
+          await fetchStudentData(event.Document);
+        } else if (event.PersonType === 1 && event.Document) {
+          await fetchEmployeeData(event.Document);
+        }
       }
-    });
+    };
+    fetchExtras();
+    return () => { cancelled = true; };
   }, [events, fetchStudentData, fetchEmployeeData]);
 
   // Initial Load & Search

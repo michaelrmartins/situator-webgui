@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { DOORS_TODAY_QUERY, HOURLY_ACCESS_QUERY, DAILY_ACCESS_QUERY, AUTHORIZATION_STATS_QUERY, RFID_STATS_QUERY, NO_RFID_ACCESS_QUERY } from '@/lib/queries';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);

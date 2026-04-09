@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 import { PERSON_HISTORY_QUERY } from '@/lib/queries';
 
 export async function GET(request: Request) {

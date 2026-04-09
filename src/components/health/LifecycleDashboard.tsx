@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ReactECharts from "echarts-for-react";
 
 interface ExpirationTimeline {
@@ -11,8 +11,17 @@ interface ExpirationTimeline {
 export default function LifecycleDashboard() {
   const [timeline, setTimeline] = useState<ExpirationTimeline[]>([]);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
-    fetch("/api/health/lifecycle")
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/health/lifecycle", { cache: 'no-store', signal: abortControllerRef.current?.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Users, DoorOpen, Loader2, ShieldAlert } from 'lucide-react';
 
@@ -16,16 +16,26 @@ export default function StatusPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const getSignal = () => abortControllerRef.current?.signal;
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch('/api/reports?type=doors');
+        const res = await fetch('/api/reports?type=doors', { cache: 'no-store', signal: getSignal() });
         if (!res.ok) throw new Error('Failed to fetch door data');
         const data = await res.json();
         setDoorData(data);
         setError(null);
       } catch (err: any) {
-        setError(err.message);
+        if (err.name !== 'AbortError') setError(err.message);
       } finally {
         setIsLoading(false);
       }

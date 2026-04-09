@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { BarChart3, CalendarDays, Loader2, ShieldAlert } from 'lucide-react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -21,6 +21,17 @@ export default function ReportsPage() {
   // Flat UI Colors
   const flatColors = ['#1abc9c', '#3498db', '#e74c3c', '#f1c40f', '#9b59b6', '#34495e', '#e67e22', '#2ecc71', '#16a085', '#2980b9'];
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const getSignal = () => abortControllerRef.current?.signal;
+
   const fetchReports = async () => {
     setIsLoading(true);
     setError(null);
@@ -29,9 +40,9 @@ export default function ReportsPage() {
       const endMs = dateRange.end.getTime();
 
       const [hourlyRes, doorsRes, dailyRes] = await Promise.all([
-        fetch(`/api/reports?type=hourly&start=${startMs}&end=${endMs}`),
-        fetch(`/api/reports?type=doors&start=${startMs}&end=${endMs}`),
-        fetch(`/api/reports?type=daily&start=${startMs}&end=${endMs}`)
+        fetch(`/api/reports?type=hourly&start=${startMs}&end=${endMs}`, { cache: 'no-store', signal: getSignal() }),
+        fetch(`/api/reports?type=doors&start=${startMs}&end=${endMs}`, { cache: 'no-store', signal: getSignal() }),
+        fetch(`/api/reports?type=daily&start=${startMs}&end=${endMs}`, { cache: 'no-store', signal: getSignal() })
       ]);
 
       if (!hourlyRes.ok || !doorsRes.ok || !dailyRes.ok) {
@@ -46,7 +57,7 @@ export default function ReportsPage() {
       setDoorData(doors);
       setDailyData(daily);
     } catch (err: any) {
-      setError(err.message);
+      if (err.name !== 'AbortError') setError(err.message);
     } finally {
       setIsLoading(false);
     }

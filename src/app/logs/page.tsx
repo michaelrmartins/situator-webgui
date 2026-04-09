@@ -48,28 +48,40 @@ export default function LogsPage() {
   const employeeDataCache = useRef<Record<string, EmployeeData | null>>({});
   const [employeeDataMap, setEmployeeDataMap] = useState<Record<string, EmployeeData>>({});
 
+  // AbortController to cancel all in-flight requests on unmount
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const getSignal = () => abortControllerRef.current?.signal;
+
   const fetchStudentData = useCallback(async (document: string) => {
     if (!document || document in studentDataCache.current) return;
     studentDataCache.current[document] = null; // mark as in-flight
     try {
-      const res = await fetch(`/api/lyceum?document=${encodeURIComponent(document)}`);
+      const res = await fetch(`/api/lyceum?document=${encodeURIComponent(document)}`, { cache: 'no-store', signal: getSignal() });
       if (res.status === 204 || !res.ok) return;
       const data: StudentData = await res.json();
       studentDataCache.current[document] = data;
       setStudentDataMap(prev => ({ ...prev, [document]: data }));
-    } catch {}
+    } catch (e: any) { if (e.name !== 'AbortError') console.log('Lyceum unavailable'); }
   }, []);
 
   const fetchEmployeeData = useCallback(async (document: string) => {
     if (!document || document in employeeDataCache.current) return;
     employeeDataCache.current[document] = null; // mark as in-flight
     try {
-      const res = await fetch(`/api/nasajon?document=${encodeURIComponent(document)}`);
+      const res = await fetch(`/api/nasajon?document=${encodeURIComponent(document)}`, { cache: 'no-store', signal: getSignal() });
       if (res.status === 204 || !res.ok) return;
       const data: EmployeeData = await res.json();
       employeeDataCache.current[document] = data;
       setEmployeeDataMap(prev => ({ ...prev, [document]: data }));
-    } catch {}
+    } catch (e: any) { if (e.name !== 'AbortError') console.log('Nasajon unavailable'); }
   }, []);
 
   const fetchLogs = async (silent = false) => {
@@ -80,9 +92,9 @@ export default function LogsPage() {
       const endMs = dateRange.end.getTime();
 
       const [authRes, rfidRes, noRfidRes] = await Promise.all([
-        fetch(`/api/reports?type=auth&start=${startMs}&end=${endMs}`),
-        fetch(`/api/reports?type=rfid&start=${startMs}&end=${endMs}`),
-        fetch(`/api/reports?type=no-rfid&start=${startMs}&end=${endMs}`)
+        fetch(`/api/reports?type=auth&start=${startMs}&end=${endMs}`, { cache: 'no-store', signal: getSignal() }),
+        fetch(`/api/reports?type=rfid&start=${startMs}&end=${endMs}`, { cache: 'no-store', signal: getSignal() }),
+        fetch(`/api/reports?type=no-rfid&start=${startMs}&end=${endMs}`, { cache: 'no-store', signal: getSignal() })
       ]);
 
       if (!authRes.ok || !rfidRes.ok || !noRfidRes.ok) throw new Error('Failed to fetch data');
@@ -91,7 +103,7 @@ export default function LogsPage() {
       setRfidData(await rfidRes.json());
       setNoRfidData(await noRfidRes.json());
     } catch (err: any) {
-      if (!silent) setError(err.message);
+      if (err.name !== 'AbortError' && !silent) setError(err.message);
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -101,12 +113,12 @@ export default function LogsPage() {
     setLoadingHistory(true);
     setPersonHistory([]);
     try {
-      const res = await fetch(`/api/person-history?id=${id}&limit=10`);
+      const res = await fetch(`/api/person-history?id=${id}&limit=10`, { cache: 'no-store', signal: getSignal() });
       if (res.ok) {
         setPersonHistory(await res.json());
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') console.error(e);
     } finally {
       setLoadingHistory(false);
     }
@@ -125,16 +137,22 @@ export default function LogsPage() {
   }, [dateRange]);
 
   useEffect(() => {
-    noRfidData.forEach((person: any) => {
-      const typeLower = String(person.PersonType || '').toLowerCase();
-      const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
-      const document = person.Matricula;
-      if (isStudent && document) {
-        fetchStudentData(document);
-      } else if (!isStudent && document) {
-        fetchEmployeeData(document);
+    let cancelled = false;
+    const fetchExtras = async () => {
+      for (const person of noRfidData) {
+        if (cancelled) break;
+        const typeLower = String(person.PersonType || '').toLowerCase();
+        const isStudent = typeLower.includes('aluno') || typeLower.includes('estudante') || typeLower.includes('student') || typeLower === '2';
+        const document = person.Matricula;
+        if (isStudent && document) {
+          await fetchStudentData(document);
+        } else if (!isStudent && document) {
+          await fetchEmployeeData(document);
+        }
       }
-    });
+    };
+    fetchExtras();
+    return () => { cancelled = true; };
   }, [noRfidData, fetchStudentData, fetchEmployeeData]);
 
   const handleDateChange = (daysAgo: number) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ReactECharts from "echarts-for-react";
 
 interface ProductivityStats {
@@ -19,8 +19,17 @@ export default function OperatorsDashboard() {
   const [productivity, setProductivity] = useState<ProductivityStats[]>([]);
   const [syncFailures, setSyncFailures] = useState<SyncFailure[]>([]);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
-    fetch("/api/health/operators")
+    abortControllerRef.current = new AbortController();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/health/operators", { cache: 'no-store', signal: abortControllerRef.current?.signal })
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) {
