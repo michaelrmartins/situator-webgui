@@ -55,7 +55,7 @@ export function startWebhookWorker() {
         return;
       }
 
-      if (eventTime > globalForWorker.lastEventTime) {
+      if (eventTime > (globalForWorker.lastEventTime || 0)) {
         globalForWorker.lastEventTime = eventTime;
 
         // Apply filters
