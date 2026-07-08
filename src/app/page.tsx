@@ -65,11 +65,27 @@ export default function LiveFeed() {
   const employeeDataCache = useRef<Record<string, EmployeeData | null>>({});
   const [employeeDataMap, setEmployeeDataMap] = useState<Record<string, EmployeeData>>({});
 
+  // Webhook Config & State
+  const webhookConfigRef = useRef({ enabled: false, url: '' });
+  const lastEventTimeRef = useRef<number>(0);
+
   // AbortController to cancel all in-flight requests on unmount
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Create a fresh AbortController on mount, abort on unmount
   useEffect(() => {
+    fetch('/api/settings', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          webhookConfigRef.current = {
+            enabled: data.webhookEnabled || false,
+            url: data.webhookUrl || ''
+          };
+        }
+      })
+      .catch(console.error);
+
     abortControllerRef.current = new AbortController();
     return () => {
       abortControllerRef.current?.abort();
@@ -179,6 +195,36 @@ export default function LiveFeed() {
     fetchExtras();
     return () => { cancelled = true; };
   }, [events, fetchStudentData, fetchEmployeeData]);
+
+  // Webhook Trigger Logic
+  useEffect(() => {
+    if (events.length > 0) {
+      const latest = events[0];
+      const eventTime = new Date(latest.Time).getTime();
+      
+      if (lastEventTimeRef.current > 0 && eventTime > lastEventTimeRef.current) {
+         const { enabled, url } = webhookConfigRef.current;
+         if (enabled && url) {
+            fetch('/api/webhook/send', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ url, payload: latest })
+            }).then(async (res) => {
+               if (!res.ok) {
+                  const data = await res.json().catch(() => ({}));
+                  console.error('Webhook proxy returned error:', data.error || res.statusText);
+               } else {
+                  console.log('Webhook sent successfully to proxy!');
+               }
+            }).catch(err => console.error('Webhook request failed:', err));
+         }
+      }
+      
+      if (eventTime > lastEventTimeRef.current) {
+         lastEventTimeRef.current = eventTime;
+      }
+    }
+  }, [events]);
 
   // Initial Load & Search
   useEffect(() => {

@@ -16,14 +16,29 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { host, port, database, user, password, testOnly } = body;
+    const { host, port, database, user, password, webhookEnabled, webhookUrl, testOnly, type } = body;
+
+    const currentConfig = await getConfig();
+
+    if (type === 'webhook') {
+      const newConfig = {
+        ...currentConfig,
+        webhookEnabled,
+        webhookUrl,
+      };
+      await setConfig(newConfig);
+      return NextResponse.json({ success: true, message: 'Webhook settings saved successfully' });
+    }
 
     const newConfig = {
+      ...currentConfig,
       host,
       port: port ? Number(port) : undefined,
       database,
       user,
-      password,
+      password: password || currentConfig.password,
+      webhookEnabled: webhookEnabled !== undefined ? webhookEnabled : currentConfig.webhookEnabled,
+      webhookUrl: webhookUrl !== undefined ? webhookUrl : currentConfig.webhookUrl,
     };
 
     // If testOnly is true, we just test the connection without saving

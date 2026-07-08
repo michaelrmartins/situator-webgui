@@ -3,5 +3,7 @@
   "port": 7021,
   "database": "situator",
   "user": "admin",
-  "password": "SitPass42"
+  "password": "SitPass42",
+  "webhookEnabled": true,
+  "webhookUrl": "http://whatsappbot-fmc-n8n.intranetserver.local/webhook/d8b651f9-88c6-4cf1-95d2-4f3844283bf9"
 }

@@ -7,6 +7,8 @@ export interface DbConfig {
   database?: string;
   user?: string;
   password?: string;
+  webhookEnabled?: boolean;
+  webhookUrl?: string;
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');

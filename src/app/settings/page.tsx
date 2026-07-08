@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Database, Save, Activity, ShieldAlert, Loader2 } from 'lucide-react';
+import { Database, Save, Activity, ShieldAlert, Loader2, Webhook } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function SettingsPage() {
@@ -11,12 +11,18 @@ export default function SettingsPage() {
     database: '',
     user: '',
     password: '',
+    webhookEnabled: false,
+    webhookUrl: '',
   });
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  
+  const [isSavingDb, setIsSavingDb] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
+  const [dbMessage, setDbMessage] = useState({ text: '', type: '' });
+
+  const [isSavingWebhook, setIsSavingWebhook] = useState(false);
+  const [webhookMessage, setWebhookMessage] = useState({ text: '', type: '' });
 
   useEffect(() => {
     fetch('/api/settings', { cache: 'no-store' })
@@ -29,6 +35,8 @@ export default function SettingsPage() {
              database: data.database || '',
              user: data.user || '',
              password: '', // Do not expose password
+             webhookEnabled: data.webhookEnabled || false,
+             webhookUrl: data.webhookUrl || '',
            });
         }
         setIsLoading(false);
@@ -37,12 +45,13 @@ export default function SettingsPage() {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setConfig({ ...config, [e.target.name]: e.target.value });
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setConfig({ ...config, [e.target.name]: value });
   };
 
   const handleTest = async () => {
     setIsTesting(true);
-    setMessage({ text: '', type: '' });
+    setDbMessage({ text: '', type: '' });
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
@@ -51,37 +60,60 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: 'Connection successful!', type: 'success' });
+        setDbMessage({ text: 'Connection successful!', type: 'success' });
       } else {
-        setMessage({ text: data.error || 'Connection failed', type: 'error' });
+        setDbMessage({ text: data.error || 'Connection failed', type: 'error' });
       }
     } catch (err: any) {
-      setMessage({ text: 'Network error', type: 'error' });
+      setDbMessage({ text: 'Network error', type: 'error' });
     } finally {
       setIsTesting(false);
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveDatabase = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
-    setMessage({ text: '', type: '' });
+    setIsSavingDb(true);
+    setDbMessage({ text: '', type: '' });
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({ ...config, type: 'database' }),
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: 'Settings saved successfully!', type: 'success' });
+        setDbMessage({ text: 'Database settings saved successfully!', type: 'success' });
       } else {
-        setMessage({ text: data.error || 'Failed to save settings', type: 'error' });
+        setDbMessage({ text: data.error || 'Failed to save settings', type: 'error' });
       }
     } catch (err: any) {
-      setMessage({ text: 'Network error', type: 'error' });
+      setDbMessage({ text: 'Network error', type: 'error' });
     } finally {
-      setIsSaving(false);
+      setIsSavingDb(false);
+    }
+  };
+
+  const handleSaveWebhook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingWebhook(true);
+    setWebhookMessage({ text: '', type: '' });
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...config, type: 'webhook' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWebhookMessage({ text: 'Webhook settings saved successfully!', type: 'success' });
+      } else {
+        setWebhookMessage({ text: data.error || 'Failed to save settings', type: 'error' });
+      }
+    } catch (err: any) {
+      setWebhookMessage({ text: 'Network error', type: 'error' });
+    } finally {
+      setIsSavingWebhook(false);
     }
   };
 
@@ -110,8 +142,8 @@ export default function SettingsPage() {
            </p>
         </div>
 
-        <div className="glass-panel p-8 rounded-2xl">
-          <form onSubmit={handleSave} className="space-y-6">
+        <div className="glass-panel p-8 rounded-2xl mb-8">
+          <form onSubmit={handleSaveDatabase} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-300 ml-1">Host URL / IP</label>
@@ -179,16 +211,16 @@ export default function SettingsPage() {
 
             <div className="pt-6 flex items-center justify-between border-t border-white/10">
               <AnimatePresence>
-                 {message.text && (
+                 {dbMessage.text && (
                    <motion.div
                      initial={{ opacity: 0, x: -10 }}
                      animate={{ opacity: 1, x: 0 }}
                      exit={{ opacity: 0 }}
                      className={`flex items-center gap-2 text-sm px-4 py-2 rounded-lg 
-                        ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}
+                        ${dbMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}
                    >
-                     {message.type === 'success' ? <Activity size={16} /> : <ShieldAlert size={16} />}
-                     {message.text}
+                     {dbMessage.type === 'success' ? <Activity size={16} /> : <ShieldAlert size={16} />}
+                     {dbMessage.text}
                    </motion.div>
                  )}
               </AnimatePresence>
@@ -197,17 +229,80 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleTest}
-                  disabled={isTesting || isSaving}
+                  disabled={isTesting || isSavingDb}
                   className="px-5 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 transition-all font-medium disabled:opacity-50 flex items-center gap-2"
                 >
                   {isTesting ? <Loader2 size={18} className="animate-spin" /> : 'Test Connection'}
                 </button>
                 <button
                   type="submit"
-                  disabled={isTesting || isSaving}
+                  disabled={isTesting || isSavingDb}
                   className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all font-medium shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isSaving ? <Loader2 size={18} className="animate-spin" /> : <><Save size={18} /> Save Config</>}
+                  {isSavingDb ? <Loader2 size={18} className="animate-spin" /> : <><Save size={18} /> Save DB Config</>}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div className="glass-panel p-8 rounded-2xl">
+          <form onSubmit={handleSaveWebhook} className="space-y-6">
+            <div>
+               <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+                  <Webhook className="text-[#9b59b6]" size={24} /> Webhook Integrations
+               </h2>
+               
+               <div className="space-y-6">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                     <div className="relative">
+                        <input type="checkbox" name="webhookEnabled" checked={config.webhookEnabled} onChange={handleChange} className="sr-only" />
+                        <div className={`block w-14 h-8 rounded-full transition-colors ${config.webhookEnabled ? 'bg-blue-500' : 'bg-white/10 border border-white/20'}`}></div>
+                        <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${config.webhookEnabled ? 'translate-x-6' : ''}`}></div>
+                     </div>
+                     <div>
+                        <div className="text-sm font-medium text-slate-200">Enable Webhook</div>
+                        <div className="text-xs text-slate-400">Send real-time access events to an external URL.</div>
+                     </div>
+                  </label>
+
+                  <div className={`space-y-2 transition-all ${config.webhookEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                    <label className="text-sm font-medium text-slate-300 ml-1">Target Address (URL)</label>
+                    <input
+                      type="url"
+                      name="webhookUrl"
+                      value={config.webhookUrl}
+                      onChange={handleChange}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                      placeholder="https://your-webhook-endpoint.com/webhook"
+                    />
+                  </div>
+               </div>
+            </div>
+
+            <div className="pt-6 flex items-center justify-between border-t border-white/10">
+              <AnimatePresence>
+                 {webhookMessage.text && (
+                   <motion.div
+                     initial={{ opacity: 0, x: -10 }}
+                     animate={{ opacity: 1, x: 0 }}
+                     exit={{ opacity: 0 }}
+                     className={`flex items-center gap-2 text-sm px-4 py-2 rounded-lg 
+                        ${webhookMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}
+                   >
+                     {webhookMessage.type === 'success' ? <Activity size={16} /> : <ShieldAlert size={16} />}
+                     {webhookMessage.text}
+                   </motion.div>
+                 )}
+              </AnimatePresence>
+
+              <div className="flex items-center gap-3 ml-auto">
+                <button
+                  type="submit"
+                  disabled={isSavingWebhook}
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all font-medium shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isSavingWebhook ? <Loader2 size={18} className="animate-spin" /> : <><Save size={18} /> Save Webhook Config</>}
                 </button>
               </div>
             </div>
