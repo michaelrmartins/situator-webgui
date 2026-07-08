@@ -9,6 +9,9 @@ export interface DbConfig {
   password?: string;
   webhookEnabled?: boolean;
   webhookUrl?: string;
+  webhookFilterEnabled?: boolean;
+  webhookFilterField?: string;
+  webhookFilterValues?: string;
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');

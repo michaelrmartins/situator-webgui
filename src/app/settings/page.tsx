@@ -13,6 +13,9 @@ export default function SettingsPage() {
     password: '',
     webhookEnabled: false,
     webhookUrl: '',
+    webhookFilterEnabled: false,
+    webhookFilterField: 'Document',
+    webhookFilterValues: '',
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -37,6 +40,9 @@ export default function SettingsPage() {
              password: '', // Do not expose password
              webhookEnabled: data.webhookEnabled || false,
              webhookUrl: data.webhookUrl || '',
+             webhookFilterEnabled: data.webhookFilterEnabled || false,
+             webhookFilterField: data.webhookFilterField || 'Document',
+             webhookFilterValues: data.webhookFilterValues || '',
            });
         }
         setIsLoading(false);
@@ -266,16 +272,61 @@ export default function SettingsPage() {
                      </div>
                   </label>
 
-                  <div className={`space-y-2 transition-all ${config.webhookEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                    <label className="text-sm font-medium text-slate-300 ml-1">Target Address (URL)</label>
-                    <input
-                      type="url"
-                      name="webhookUrl"
-                      value={config.webhookUrl}
-                      onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                      placeholder="https://your-webhook-endpoint.com/webhook"
-                    />
+                  <div className={`space-y-6 transition-all ${config.webhookEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-300 ml-1">Target Address (URL)</label>
+                      <input
+                        type="url"
+                        name="webhookUrl"
+                        value={config.webhookUrl}
+                        onChange={handleChange}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                        placeholder="https://your-webhook-endpoint.com/webhook"
+                      />
+                    </div>
+
+                    <div className="pt-4 border-t border-white/10">
+                      <label className="flex items-center gap-3 cursor-pointer mb-4">
+                         <div className="relative">
+                            <input type="checkbox" name="webhookFilterEnabled" checked={config.webhookFilterEnabled} onChange={handleChange} className="sr-only" />
+                            <div className={`block w-12 h-6 rounded-full transition-colors ${config.webhookFilterEnabled ? 'bg-emerald-500' : 'bg-white/10 border border-white/20'}`}></div>
+                            <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${config.webhookFilterEnabled ? 'translate-x-6' : ''}`}></div>
+                         </div>
+                         <div>
+                            <div className="text-sm font-medium text-slate-200">Enable Filtering</div>
+                            <div className="text-xs text-slate-400">Only send webhook if specific fields match given values.</div>
+                         </div>
+                      </label>
+
+                      <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 transition-all ${config.webhookFilterEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                        <div className="space-y-2 md:col-span-1">
+                          <label className="text-sm font-medium text-slate-300 ml-1">Filter Field</label>
+                          <select
+                            name="webhookFilterField"
+                            value={config.webhookFilterField}
+                            onChange={handleChange as any}
+                            className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                          >
+                            <option value="Document">Document</option>
+                            <option value="Door">Door</option>
+                            <option value="Zone">Zone</option>
+                            <option value="Name">Name</option>
+                            <option value="PersonType">PersonType</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-sm font-medium text-slate-300 ml-1">Valid Values (comma-separated)</label>
+                          <input
+                            type="text"
+                            name="webhookFilterValues"
+                            value={config.webhookFilterValues}
+                            onChange={handleChange}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                            placeholder="e.g. 000444, 000442, 000123"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                </div>
             </div>

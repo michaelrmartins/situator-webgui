@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { host, port, database, user, password, webhookEnabled, webhookUrl, testOnly, type } = body;
+    const { host, port, database, user, password, webhookEnabled, webhookUrl, webhookFilterEnabled, webhookFilterField, webhookFilterValues, testOnly, type } = body;
 
     const currentConfig = await getConfig();
 
@@ -25,6 +25,9 @@ export async function POST(request: Request) {
         ...currentConfig,
         webhookEnabled,
         webhookUrl,
+        webhookFilterEnabled,
+        webhookFilterField,
+        webhookFilterValues,
       };
       await setConfig(newConfig);
       return NextResponse.json({ success: true, message: 'Webhook settings saved successfully' });
@@ -39,6 +42,9 @@ export async function POST(request: Request) {
       password: password || currentConfig.password,
       webhookEnabled: webhookEnabled !== undefined ? webhookEnabled : currentConfig.webhookEnabled,
       webhookUrl: webhookUrl !== undefined ? webhookUrl : currentConfig.webhookUrl,
+      webhookFilterEnabled: webhookFilterEnabled !== undefined ? webhookFilterEnabled : currentConfig.webhookFilterEnabled,
+      webhookFilterField: webhookFilterField !== undefined ? webhookFilterField : currentConfig.webhookFilterField,
+      webhookFilterValues: webhookFilterValues !== undefined ? webhookFilterValues : currentConfig.webhookFilterValues,
     };
 
     // If testOnly is true, we just test the connection without saving

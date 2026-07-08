@@ -66,7 +66,13 @@ export default function LiveFeed() {
   const [employeeDataMap, setEmployeeDataMap] = useState<Record<string, EmployeeData>>({});
 
   // Webhook Config & State
-  const webhookConfigRef = useRef({ enabled: false, url: '' });
+  const webhookConfigRef = useRef({ 
+    enabled: false, 
+    url: '',
+    filterEnabled: false,
+    filterField: 'Document',
+    filterValues: ''
+  });
   const lastEventTimeRef = useRef<number>(0);
 
   // AbortController to cancel all in-flight requests on unmount
@@ -80,7 +86,10 @@ export default function LiveFeed() {
         if (!data.error) {
           webhookConfigRef.current = {
             enabled: data.webhookEnabled || false,
-            url: data.webhookUrl || ''
+            url: data.webhookUrl || '',
+            filterEnabled: data.webhookFilterEnabled || false,
+            filterField: data.webhookFilterField || 'Document',
+            filterValues: data.webhookFilterValues || ''
           };
         }
       })
@@ -203,13 +212,27 @@ export default function LiveFeed() {
       const eventTime = new Date(latest.Time).getTime();
       
       if (lastEventTimeRef.current > 0 && eventTime > lastEventTimeRef.current) {
-         const { enabled, url } = webhookConfigRef.current;
+         const { enabled, url, filterEnabled, filterField, filterValues } = webhookConfigRef.current;
          if (enabled && url) {
-            fetch('/api/webhook/send', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ url, payload: latest })
-            }).then(async (res) => {
+            let shouldSend = true;
+            
+            if (filterEnabled && filterField && filterValues) {
+               const allowedValues = filterValues.split(',').map(v => v.trim()).filter(Boolean);
+               if (allowedValues.length > 0) {
+                  const eventValue = String(latest[filterField as keyof AccessEvent] || '').trim();
+                  if (!allowedValues.includes(eventValue)) {
+                     shouldSend = false;
+                     console.log(`Webhook skipped: ${filterField} '${eventValue}' not in allowed list.`);
+                  }
+               }
+            }
+
+            if (shouldSend) {
+               fetch('/api/webhook/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url, payload: latest })
+               }).then(async (res) => {
                if (!res.ok) {
                   const data = await res.json().catch(() => ({}));
                   console.error('Webhook proxy returned error:', data.error || res.statusText);
@@ -217,6 +240,7 @@ export default function LiveFeed() {
                   console.log('Webhook sent successfully to proxy!');
                }
             }).catch(err => console.error('Webhook request failed:', err));
+            }
          }
       }
       
